@@ -3,6 +3,7 @@
 #include "SMEM.h"
 #include "ConfigFile.h"
 #include "CDataToMessageOK.h"
+#include "CSTC.h"
 PDEVICEPEDPUSHBUTTON::PDEVICEPEDPUSHBUTTON()
 {
     for(int i=0 ;i<20 ;i++){//防呆
@@ -90,6 +91,7 @@ bool PDEVICEPEDPUSHBUTTON::ProcessEAC6(MESSAGEOK message)
             sprintf(tmp,"---->DEVID:%d ------------> Ped Button is running",DevId);
             smem.vWriteMsgToDOM(tmp);
             smem.cPedPushButton.ActivateTakePlace(60000);   //devID固定為60000,執行行人觸動
+            smem.vSetBOOLData(TC_CCT_PedSW_Check,true);
             //smem.cPedPushButton.SetPEDSWVar(DevId,1);
 //            ConfigFile config( "/cct/vddata/dev.cfg" );
 //            // Values can be read from the file by name
@@ -136,6 +138,7 @@ bool PDEVICEPEDPUSHBUTTON::SendPEDLightForCHU(unsigned int device,unsigned int l
 {
     unsigned char data[4]={0};
     if(smem.vGetINTData(Com2_TYPE)==Com2IsPedestrianPushButton || smem.vGetINTData(Com2_TYPE)==Com2IsRedCountAndCom1IsPedPushButton){
+        if(light == 1) smem.SetPedlightcheck(true);
         for(int i=0 ; i<smem.cPedPushButton.GetDevCount();i++){
             data[0]=0xEA;
             data[1]=0x17;

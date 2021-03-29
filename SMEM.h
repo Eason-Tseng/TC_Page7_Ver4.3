@@ -123,7 +123,7 @@ class SMEM
         bool vSetHWCycleCodeFor_0F14_0FC4(unsigned char);
         unsigned char vGetHWCycleCodeFor_0F14_0FC4(void);
         unsigned char HWCycleCode;
-
+        bool bEnablePedSWCheck; //Eason_Ver4.3
 
         unsigned char vGetHardwareStatus(int);                                 //只有vGet沒有vSet，故意的，由vGet自行判斷
 

@@ -76,6 +76,7 @@ struct itimerspec CSTC::_itimer_reportcount;
 struct itimerspec CSTC::_itimer_record_traffic;
 struct itimerspec CSTC::_itimer_reversetime;
 struct itimerspec CSTC::_itimer_plan_WDT;
+struct itimerspec CSTC::_itimer_plan_timer; //_itimer_plan有機率發生Thread interference問題 故新增此一timer已避免異常情況發生 Eason_Ver4.3
 
 #define LCN_NON_INITIALIZED_VALUE        9999
 #define PHASEORDER_NON_INITIALIZED_VALUE 9999
@@ -1573,17 +1574,81 @@ try {
 //==        printf("THREAD_LIGHT_CONTROL: getting signal from ");
         switch (timerid) {
           case( 1000 ):  //_timer_plan
-//==            printf( "TIMER: PLAN\n" );
-            /******** lock mutex ********/
             pthread_mutex_lock(&CSTC::_stc_mutex);
-            if(_current_strategy==STRATEGY_TOD||_current_strategy==STRATEGY_AUTO_CADC||_current_strategy==STRATEGY_CADC){
-              ReSetStep(true);
-              ReSetExtendTimer();
-              SetLightAfterExtendTimerReSet();
-              if(smem.vGetBOOLData(TC_CCTActuate_TOD_Running) == true) {
-                vCheckPhaseForTFDActuateExtendTime_5FCF();
+            if(_current_strategy==STRATEGY_TOD||_current_strategy==STRATEGY_AUTO_CADC||_current_strategy==STRATEGY_CADC) //Eason_Ver4.3
+            {
+              unsigned short planorderTem;
+              planorderTem = stc.vGetUSIData(CSTC_exec_plan_phase_order);//紀錄舊Plan order
+
+              // if((planorderTem == 0x80 || planorderTem == 0xB0) && smem.vGetBOOLData(TC_CCT_In_LongTanu_ActuateType_Switch))//舊Plan order == 閃光 && 行人觸動
+              // {
+              //     ReSetExtendTimer();
+              //     AllRed5Seconds();
+              //     _current_strategy = STRATEGY_TOD;
+              //     _exec_phase._phase_order = 0xB0;
+              //     // _exec_phase_current_subphase = 0;
+              //     // _exec_phase_current_subphase_step = 0;
+              //     ReSetStep(false);
+              //     SendRequestToKeypad();
+              //     ReSetExtendTimer();
+              //     SetLightAfterExtendTimerReSet();
+              //     if (smem.vGetBOOLData(TC_CCTActuate_TOD_Running) == true) vCheckPhaseForTFDActuateExtendTime_5FCF();         
+              // }
+              // else if(planorderTem == 0x80 || planorderTem == 0xB0)//舊Plan order == 閃光
+
+              if(planorderTem == 0x80 || planorderTem == 0xB0)//舊Plan order == 閃光
+              {
+                if(smem.vGetBOOLData(TC_CCT_PedSW_Check) == true)  //行人觸動開啟（通訊式）
+                {
+                  // smem.vSetBOOLData(TC_CCT_PedSW_Check,false);
+                  // ReSetExtendTimer();
+                  // AllRed5Seconds();
+                  // _current_strategy = STRATEGY_TOD;
+                  // ReSetStep(false);
+                  // SendRequestToKeypad();
+                  // ReSetExtendTimer();
+                  // SetLightAfterExtendTimerReSet();
+                  // if (smem.vGetBOOLData(TC_CCTActuate_TOD_Running) == true) vCheckPhaseForTFDActuateExtendTime_5FCF();
+                  ReSetStep(true);
+                  ReSetExtendTimer();
+                  SetLightAfterExtendTimerReSet();
+                  if (smem.vGetBOOLData(TC_CCTActuate_TOD_Running) == true) vCheckPhaseForTFDActuateExtendTime_5FCF();     
+                  smem.vSetBOOLData(TC_CCT_PedSW_Check,false);
+                }
+                else
+                {
+                  ReSetStep(true);
+                  if(planorderTem != stc.vGetUSIData(CSTC_exec_plan_phase_order))//新Plan order != 閃光
+                  {
+                    // printf("\n\n\n\n\n\nnow is add ALLRED 3sec test!!!\n\n\n\n\n");
+                    ReSetExtendTimer();
+                    AllRed5Seconds();
+                    _current_strategy = STRATEGY_TOD;
+                    // _exec_phase_current_subphase = 0;
+                    // _exec_phase_current_subphase_step = 0;
+                    ReSetStep(false);
+                    SendRequestToKeypad();
+                    ReSetExtendTimer();
+                    SetLightAfterExtendTimerReSet();
+                    if (smem.vGetBOOLData(TC_CCTActuate_TOD_Running) == true) vCheckPhaseForTFDActuateExtendTime_5FCF();                                
+                  }
+                  else//新舊Plan order == 閃光
+                  {
+                    ReSetExtendTimer();
+                    SetLightAfterExtendTimerReSet();
+                    if (smem.vGetBOOLData(TC_CCTActuate_TOD_Running) == true) vCheckPhaseForTFDActuateExtendTime_5FCF();
+                  }
+                }
               }
-            }
+              else
+              {
+                ReSetStep(true);
+                ReSetExtendTimer();
+                SetLightAfterExtendTimerReSet();
+                if (smem.vGetBOOLData(TC_CCTActuate_TOD_Running) == true) vCheckPhaseForTFDActuateExtendTime_5FCF();     
+                smem.vSetBOOLData(TC_CCT_PedSW_Check,false);
+              }
+            }  
             /******** unlock mutex ********/
             pthread_mutex_unlock(&CSTC::_stc_mutex);
             break;
@@ -1767,6 +1832,9 @@ try {
           if(smem.vGetBOOLData(TC_CCTActuate_TOD_Running) == true) {
             vCheckPhaseForTFDActuateExtendTime_5FCF();
           }
+           char msg[256];
+          sprintf(msg,"in Plan WDT PlanID:%d ,Phase:%d ,Step:%d ,Plan_sec %d ,Plan_test_sec %d ,WDT_sec %d",_exec_plan._planid,stc.vGetUSIData(CSTC_exec_phase_current_subphase),stc.vGetUSIData(CSTC_exec_phase_current_subphase_step),_itimer_plan.it_value.tv_sec,_itimer_plan_timer.it_value.tv_sec,_itimer_plan_WDT.it_value.tv_sec);
+          smem.vWriteMsgToDOM(msg);  
         } else {
           _itimer_plan_WDT.it_value.tv_sec = 0;                                 //default every 5 sec trigger.
           _itimer_plan_WDT.it_interval.tv_sec = 0;                                 //default every 5 sec trigger.
@@ -2345,6 +2413,8 @@ try {
   if( _current_strategy==STRATEGY_CADC || _current_strategy==STRATEGY_AUTO_CADC || _current_strategy==STRATEGY_TOD ){
     if( _exec_plan._phase_order==FLASH_PHASEORDER||_exec_plan._phase_order==ALLRED_PHASEORDER ){
       _itimer_plan.it_value.tv_sec=10;
+      _itimer_plan_timer.it_value.tv_sec=10;
+      _itimer_plan_WDT.it_value.tv_sec=12;
     }
 
     else {
@@ -2383,6 +2453,7 @@ try {
                                                                , _exec_plan._ptr_subplaninfo[_exec_phase_current_subphase]._green_compensation );
 
             _itimer_plan.it_value.tv_sec = _exec_plan._ptr_subplaninfo[_exec_phase_current_subphase].compensated_green(_exec_plan._shorten_cycle);
+            _itimer_plan_timer.it_value.tv_sec = _exec_plan._ptr_subplaninfo[_exec_phase_current_subphase].compensated_green(_exec_plan._shorten_cycle);
             //jacky20141203
 //            if(smem.GetPriorityswitch() || smem.GetGreenManonoff5014()==1){
 //                if(smem.GetLearningPGPRAcrossCycle()){  //shotdown Learning PGPR Count
@@ -2405,6 +2476,7 @@ try {
                                                              , _exec_plan._ptr_subplaninfo[_exec_phase_current_subphase]._pedgreen_flash_compensation );
 
           _itimer_plan.it_value.tv_sec = _exec_plan._ptr_subplaninfo[_exec_phase_current_subphase].compensated_pedgreen_flash(_exec_plan._shorten_cycle);
+          _itimer_plan_timer.it_value.tv_sec = _exec_plan._ptr_subplaninfo[_exec_phase_current_subphase].compensated_pedgreen_flash(_exec_plan._shorten_cycle);
         break;
 
         case(2):
@@ -2413,6 +2485,7 @@ try {
                                                              , _exec_plan._ptr_subplaninfo[_exec_phase_current_subphase]._pedred_compensation );
 
           _itimer_plan.it_value.tv_sec = _exec_plan._ptr_subplaninfo[_exec_phase_current_subphase].compensated_pedred(_exec_plan._shorten_cycle);
+          _itimer_plan_timer.it_value.tv_sec = _exec_plan._ptr_subplaninfo[_exec_phase_current_subphase].compensated_pedred(_exec_plan._shorten_cycle);
         break;
 
         case(3):
@@ -2421,6 +2494,7 @@ try {
                                                              , _exec_plan._ptr_subplaninfo[_exec_phase_current_subphase]._yellow_compensation );
 
           _itimer_plan.it_value.tv_sec = _exec_plan._ptr_subplaninfo[_exec_phase_current_subphase].compensated_yellow(_exec_plan._shorten_cycle);
+          _itimer_plan_timer.it_value.tv_sec = _exec_plan._ptr_subplaninfo[_exec_phase_current_subphase].compensated_yellow(_exec_plan._shorten_cycle);
         break;
 
         case(4):
@@ -2429,6 +2503,7 @@ try {
                                                              , _exec_plan._ptr_subplaninfo[_exec_phase_current_subphase]._allred_compensation );
 
           _itimer_plan.it_value.tv_sec = _exec_plan._ptr_subplaninfo[_exec_phase_current_subphase].compensated_allred(_exec_plan._shorten_cycle);
+          _itimer_plan_timer.it_value.tv_sec = _exec_plan._ptr_subplaninfo[_exec_phase_current_subphase].compensated_allred(_exec_plan._shorten_cycle);
           break;
       }
 
@@ -2440,6 +2515,7 @@ try {
         case(0):
           if(_exec_plan._ptr_subplaninfo[_exec_phase_current_subphase]._min_green > 0) {
             _itimer_plan.it_value.tv_sec = _exec_plan._ptr_subplaninfo[_exec_phase_current_subphase]._min_green;
+            _itimer_plan_timer.it_value.tv_sec = _exec_plan._ptr_subplaninfo[_exec_phase_current_subphase]._min_green;
           }
           printf(" %d green_min_time=%3d\n", _exec_plan._ptr_subplaninfo[_exec_phase_current_subphase]._min_green);
 
@@ -2460,6 +2536,7 @@ try {
                 smem.vSetCurrentSubphaseRunning5F1C(_exec_phase_current_subphase, true);
             } else {
                 _itimer_plan.it_value.tv_sec = _exec_plan._ptr_subplaninfo[_exec_phase_current_subphase]._min_green;
+                _itimer_plan_timer.it_value.tv_sec = _exec_plan._ptr_subplaninfo[_exec_phase_current_subphase]._min_green;
             }
         }
     }
@@ -2522,6 +2599,12 @@ try {
     _itimer_plan.it_interval.tv_sec = 0;
     _itimer_plan.it_interval.tv_nsec = 0;
 
+    _itimer_plan_timer.it_value.tv_nsec = 0;
+    _itimer_plan_timer.it_interval.tv_sec = 0;
+    _itimer_plan_timer.it_interval.tv_nsec = 0;
+
+    _itimer_plan_WDT = _itimer_plan_timer; /*OT_PLAN_WDT*/
+    _itimer_plan_WDT.it_value.tv_sec += 2;
     _itimer_plan_WDT.it_value.tv_nsec = 0;
     _itimer_plan_WDT.it_interval.tv_sec = 0;
     _itimer_plan_WDT.it_interval.tv_nsec = 0;
@@ -2531,7 +2614,7 @@ try {
     {
      for(int ii = 0; ii < 4; ii++) {
 
-      if ( timer_settime( _timer_plan, 0, & _itimer_plan, NULL ) )
+      if ( timer_settime( _timer_plan, 0, & _itimer_plan_timer, NULL ) )
       {
         printf("Settime Error!.\n");
         exit( 1 );
@@ -13087,6 +13170,8 @@ void CSTC::CheckPed(void)   //check fix 若閃光或全紅開關on則閃燈off,�
 {
     unsigned char dtat[3];
     MESSAGEOK _MsgOK;
+    unsigned short tmp_phase;
+    char msg[50];
     if( _exec_plan._phase_order==FLASH_PHASEORDER||_exec_plan._phase_order==ALLRED_PHASEORDER ){
         for(int i=0 ; i<smem.cPedPushButton.GetDevCount();i++){
 
@@ -13103,21 +13188,26 @@ void CSTC::CheckPed(void)   //check fix 若閃光或全紅開關on則閃燈off,�
         smem.SetPedlightcheck(false);
     }else{
     }
-    if(_exec_phase_current_subphase == 1 && _exec_phase_current_subphase_step == 4 /*&& smem.GetPedlightcheck() == true*/){
-        for(int i=0 ; i<smem.cPedPushButton.GetDevCount();i++){
+    // if(_exec_phase_current_subphase == 1 && _exec_phase_current_subphase_step == 4 /*&& smem.GetPedlightcheck() == true*/){
+    if(smem.GetPedlightcheck() == true)
+    {
+      tmp_phase = phase[plan[40]._phase_order]._subphase_count;
+      if(_exec_phase_current_subphase == tmp_phase-1 && _exec_phase_current_subphase_step == 4 && smem.vGetThisCycleRunCCJPlan5F18() == true)
+      {
+        for(int i=0 ; i<smem.cPedPushButton.GetDevCount();i++)
+        {
+          printf("\n\nPed action over!!\n\n");
+          dtat[0]=0xEA;
+          dtat[1]=0x17;
+          dtat[2]=0x00;
 
-                            printf("\n\nPed action over!!\n\n");
-                            dtat[0]=0xEA;
-                            dtat[1]=0x17;
-                            dtat[2]=0x00;
-
-                            _MsgOK= oDataToMessageOK.vPackageINFOTo92PEDProtocol(dtat,3,true,smem.cPedPushButton.GetDevID(i));
-                            //_MsgOK= oDataToMessageOK.vPackageINFOTo92PEDProtocol(dtat,3,true,0xFFFF);
-                            //writeJob.WritePhysicalOut(_MsgOK.packet, _MsgOK.packetLength, DEVICEPEDESTRIAN);
-                            smem.cPedPushButton.vPushWriteOutMsgToQueue(0,_MsgOK);
+          _MsgOK= oDataToMessageOK.vPackageINFOTo92PEDProtocol(dtat,3,true,smem.cPedPushButton.GetDevID(i));
+          //_MsgOK= oDataToMessageOK.vPackageINFOTo92PEDProtocol(dtat,3,true,0xFFFF);
+          //writeJob.WritePhysicalOut(_MsgOK.packet, _MsgOK.packetLength, DEVICEPEDESTRIAN);
+          smem.cPedPushButton.vPushWriteOutMsgToQueue(0,_MsgOK);
         }
         smem.SetPedlightcheck(false);
-    }else{
+      }
     }
 }
 

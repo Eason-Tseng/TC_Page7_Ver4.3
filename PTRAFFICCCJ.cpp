@@ -49,6 +49,16 @@ try {
         if (message.ReadorWrite==cREAD ) {
           vReturnWriteACK92(message.packet[2]);
         }
+        // if(message.packet[8] != 0xA5 && message.packet[8] != 0xA9)
+        // {
+        // char msg[1024],buff[1024];
+        // for(int i=0;i<=message.packetLength;i++)
+        // {
+        //   sprintf(buff,"%3X",message.packet[i]);
+        //   strcat(msg,buff);
+        // }
+        // smem.vWriteMsgToDOM(msg);
+        // }
 
         switch (message.packet[8]) {
           case 0x10:
@@ -210,7 +220,7 @@ try{
     vReturnToCenterACK(0x5F, 0x10);
 
     _ControlStrategy.DBit = DataMessageIn.packet[9];
-    EffectTime = DataMessageIn.packet[10] * 60;                                   //EffectTime save using Sec, but protocal using Min.
+    EffectTime = DataMessageIn.packet[10] * 600;                                   //EffectTime save using Sec, but protocal using Min.
 
     data[0] = 0x5F;
     data[1] = 0x91;
@@ -220,6 +230,7 @@ try{
     smem.vSetUCData(TC92_ucControlStrategy, _ControlStrategy.DBit);
     smem.vSetINTData(TC92_iEffectTime, EffectTime);
 
+    if(smem.vGetThisCycleRunCCJPlan5F18() == false)
     smem.vSet5F18EffectTime(EffectTime);  //OT20110517
     smem.vSetINTData(TC92_iEffectTime, EffectTime);  //OT20110517
 
@@ -1845,6 +1856,7 @@ try{
        }else if (openLight >= 1){
 
         if(smem.vGetINTData(Com2_TYPE)==Com2IsPedestrianPushButton || smem.vGetINTData(Com2_TYPE)==Com2IsRedCountAndCom1IsPedPushButton){
+          smem.SetPedlightcheck(true);
         	//CCJ--20160722//for(int i=0 ; i<smem.cPedPushButton.GetDevCount();i++){
                 data[0]=0xEA;
                 data[1]=0x17;

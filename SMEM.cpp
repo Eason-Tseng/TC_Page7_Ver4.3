@@ -139,9 +139,9 @@ try {
     //jacky20141217
     Plantransition = false;
 
-    iFirmwareYear = 2016;
-    iFirmwareMonth = 02;
-    iFirmwareDay = 24;
+    iFirmwareYear = 2021;
+    iFirmwareMonth = 03;
+    iFirmwareDay = 29;
 
     //OT20140304, force log step status to /tmp
     //OT20131225, add Southern Taiwan Science Park(STSP) Greenman
@@ -2792,6 +2792,12 @@ try {
       pthread_mutex_unlock(&mutexSmem);
       break;
 
+    case(TC_CCT_PedSW_Check): //Eason_Ver4.3
+      pthread_mutex_lock(&mutexSmem);
+      bRet = bEnablePedSWCheck;
+      pthread_mutex_unlock(&mutexSmem);
+    break;
+
     default:
       bRet = false;
       break;
@@ -2940,6 +2946,12 @@ try {
       bDynSegNextPlanIdSendToCCJ = bTMP;
       pthread_mutex_unlock(&mutexSmem);
       break;
+
+    case(TC_CCT_PedSW_Check): //Eason_Ver4.3
+      pthread_mutex_lock(&mutexSmem);
+      bEnablePedSWCheck = bTMP;
+      pthread_mutex_unlock(&mutexSmem);
+    break;
 
     default:
       return false;

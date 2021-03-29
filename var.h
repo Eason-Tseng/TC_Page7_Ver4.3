@@ -228,6 +228,7 @@ extern unsigned short int TenCycle;
 #define TCDynSegSwitch            38
 #define TCDynSegStatus            39
 #define TCDynSegNextPlanIdSendToCCJ   40
+#define TC_CCT_PedSW_Check 41
 
 #define TC_Phase 0
 #define TC_Plan 1
